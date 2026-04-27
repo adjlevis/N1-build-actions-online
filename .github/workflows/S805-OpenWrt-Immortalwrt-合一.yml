@@ -1,4 +1,4 @@
-name: onecloud-OpenWrt&Immortalwrt-二合一(带Argon+TTYD+汉化)
+name: S805-OpenWrt&Immortalwrt-二合一(带Docker+Argon+空间扩容)
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +26,12 @@ on:
 env:
   REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
   TZ: Asia/Shanghai
-  ADD_PACKAGES: luci-app-ttyd luci-theme-argon luci-i18n-base-zh-cn luci-i18n-ttyd-zh-cn
+  # 自动集成：Docker + 主题 + TTYD + 中文 + 空间工具
+  ADD_PACKAGES: luci-app-ttyd luci-theme-argon luci-i18n-base-zh-cn luci-i18n-ttyd-zh-cn luci-app-dockerman luci-lib-docker docker docker-compose block-mount blkid lsblk e2fsprogs gdisk fdisk
+  # 自动分区扩容：系统空间 + Docker空间
+  ROOTFS_PARTSIZE: "1536"
+  # 自动启用外部空间
+  ENABLE_EXTERNAL_STORAGE: "1"
 
 jobs:
   build:
@@ -45,5 +50,5 @@ jobs:
       - name: 检测环境
         uses: 281677160/common@mishi
 
-      - name: 开始编译 S805 32位固件(自动带主题+终端+汉化)
+      - name: 编译S805固件(带Docker+空间分配+主题+汉化)
         uses: 281677160/common@armv7
