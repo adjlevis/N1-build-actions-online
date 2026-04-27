@@ -1,0 +1,49 @@
+name: onecloud-OpenWrt&Immortalwrt-二合一(带Argon+TTYD+汉化)
+on:
+  workflow_dispatch:
+    inputs:
+      SOURCE_TYPE:
+        description: 选择系统（OpenWrt纯净 / Immortalwrt天灵）
+        required: true
+        default: Immortalwrt
+        type: choice
+        options:
+          - OpenWrt
+          - Immortalwrt
+      REPO_BRANCH:
+        description: 源码分支
+        required: true
+        default: openwrt-23.05
+        type: choice
+        options:
+          - openwrt-23.05
+          - openwrt-24.10
+      CONFIG_FILE:
+        description: 设备配置
+        required: true
+        default: s805
+
+env:
+  REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+  TZ: Asia/Shanghai
+  ADD_PACKAGES: luci-app-ttyd luci-theme-argon luci-i18n-base-zh-cn luci-i18n-ttyd-zh-cn
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置源码地址
+        run: |
+          if [ "${{ inputs.SOURCE_TYPE }}" = "OpenWrt" ]; then
+            echo "REPO_URL=https://github.com/openwrt/openwrt" >> $GITHUB_ENV
+          else
+            echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >> $GITHUB_ENV
+          fi
+
+      - name: 检测环境
+        uses: 281677160/common@mishi
+
+      - name: 开始编译 S805 32位固件(自动带主题+终端+汉化)
+        uses: 281677160/common@armv7
