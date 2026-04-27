@@ -1,4 +1,4 @@
-name: S805-最终版(Docker+Argon+TTYD+空间扩容)
+name: S805-onecloud
 on:
   workflow_dispatch:
     inputs:
@@ -10,14 +10,23 @@ on:
         options:
           - openwrt
           - immortalwrt
-      branch:
-        description: '分支'
+      source_branch:
+        description: '选择源码分支（后续加版本直接加选项）'
         required: true
-        default: 'openwrt-23.05'
+        default: 'openwrt-24.10'
         type: choice
         options:
-          - openwrt-23.05
           - openwrt-24.10
+          - openwrt-25.00  # 占位：后续25.x发布后替换为实际分支名
+      kernel_ver:
+        description: '选择内核系列（后续加内核直接加选项）'
+        required: true
+        default: '6.12'
+        type: choice
+        options:
+          - 6.5
+          - 6.12
+          - 6.18
 
 jobs:
   build:
@@ -25,33 +34,39 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: 安装依赖
+    - name: 安装编译依赖
       run: |
         sudo apt update -y
         sudo apt install -y build-essential libncurses-dev gawk git libssl-dev gettext xsltproc zlib1g-dev unzip python3 python3-pip
 
-    - name: 下载源码
+    - name: 下载指定分支源码
       run: |
         if [ "${{ inputs.system }}" = "immortalwrt" ]; then
-          git clone --depth=1 -b ${{ inputs.branch }} https://github.com/immortalwrt/immortalwrt openwrt
+          git clone --depth=1 -b ${{ inputs.source_branch }} https://github.com/immortalwrt/immortalwrt openwrt
         else
-          git clone --depth=1 -b ${{ inputs.branch }} https://github.com/openwrt/openwrt openwrt
+          git clone --depth=1 -b ${{ inputs.source_branch }} https://github.com/openwrt/openwrt openwrt
         fi
 
-    - name: 安装 feeds
+    - name: 升级内核到指定系列
       run: |
         cd openwrt
+        if [ -f "target/linux/armvirt/Makefile" ]; then
+          sed -i "s/^KERNEL_PATCHVER.*/KERNEL_PATCHVER=${{ inputs.kernel_ver }}/" target/linux/armvirt/Makefile
+        else
+          sed -i "s/^KERNEL_PATCHVER.*/KERNEL_PATCHVER=${{ inputs.kernel_ver }}/" target/linux/generic/Makefile
+        fi
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: 导入 S805 配置
+    - name: 导入S805配置（自动IP+Docker+Argon+中文）
       run: |
         cd openwrt
-        # 写入 S805 核心配置（含Docker/Argon/空间扩容）
+        # S805 32位核心配置
         echo "CONFIG_TARGET_armvirt=y" >> .config
         echo "CONFIG_TARGET_armvirt_32=y" >> .config
         echo "CONFIG_TARGET_armvirt_32_Default=y" >> .config
         echo "CONFIG_ROOTSFS_PARTSIZE=1536" >> .config
+        # 核心功能包
         echo "CONFIG_PACKAGE_luci-app-ttyd=y" >> .config
         echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
         echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
@@ -59,19 +74,52 @@ jobs:
         echo "CONFIG_PACKAGE_luci-app-dockerman=y" >> .config
         echo "CONFIG_PACKAGE_block-mount=y" >> .config
         echo "CONFIG_PACKAGE_e2fsprogs=y" >> .config
+        # 强制适配新内核/新版本
+        echo "CONFIG_KERNEL_VERSION=${{ inputs.kernel_ver }}" >> .config
 
-    - name: 下载依赖
+        # ========== 首次开机自动分配IP（逐行echo，无红线） ==========
+        mkdir -p files/etc/config
+        echo "config interface 'loopback'" >> files/etc/config/network
+        echo "        option device 'lo'" >> files/etc/config/network
+        echo "        option proto 'static'" >> files/etc/config/network
+        echo "        option ipaddr '127.0.0.1'" >> files/etc/config/network
+        echo "        option netmask '255.0.0.0'" >> files/etc/config/network
+        echo "" >> files/etc/config/network
+        echo "config globals 'globals'" >> files/etc/config/network
+        echo "        option ula_prefix 'fd51:42f8:caae:9223::/64'" >> files/etc/config/network
+        echo "" >> files/etc/config/network
+        echo "config interface 'lan'" >> files/etc/config/network
+        echo "        option device 'br-lan'" >> files/etc/config/network
+        echo "        option proto 'static'" >> files/etc/config/network
+        echo "        option ipaddr '192.168.2.2'" >> files/etc/config/network
+        echo "        option netmask '255.255.255.0'" >> files/etc/config/network
+        echo "        option gateway '192.168.2.1'" >> files/etc/config/network
+        echo "        option dns '223.5.5.5 114.114.114.114'" >> files/etc/config/network
+        echo "" >> files/etc/config/network
+        echo "config device" >> files/etc/config/network
+        echo "        option name 'br-lan'" >> files/etc/config/network
+        echo "        option type 'bridge'" >> files/etc/config/network
+        echo "        list ports 'eth0'" >> files/etc/config/network
+
+        # ========== 设置Argon为默认主题+中文（逐行echo，无红线） ==========
+        mkdir -p files/etc/config
+        echo "config core 'main'" >> files/etc/config/luci
+        echo "        option lang 'zh_cn'" >> files/etc/config/luci
+        echo "        option mediaurlbase '/luci-static/argon'" >> files/etc/config/luci
+        echo "        option resourcebase '/luci-static/resources'" >> files/etc/config/luci
+
+    - name: 生成编译配置
       run: |
         cd openwrt
         make defconfig
 
-    - name: 编译固件
+    - name: 编译S805固件（单线程更稳）
       run: |
         cd openwrt
-        make -j$(nproc)
+        make -j1
 
     - name: 上传固件
       uses: actions/upload-artifact@v4
       with:
-        name: openwrt-s805
+        name: openwrt-s805-${{ inputs.source_branch }}-k${{ inputs.kernel_ver }}
         path: openwrt/bin/targets/armvirt/32/*.img.gz
