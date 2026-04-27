@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       system:
-        description: '选择系统'
+        description: 'Select System'
         required: true
         default: 'immortalwrt'
         type: choice
@@ -11,14 +11,14 @@ on:
           - openwrt
           - immortalwrt
       source_branch:
-        description: '选择源码分支'
+        description: 'Select Source Branch'
         required: true
         default: 'openwrt-24.10'
         type: choice
         options:
           - openwrt-24.10
       kernel_ver:
-        description: '选择内核（全部支持Docker）'
+        description: 'Select Kernel Version'
         required: true
         default: '6.12'
         type: choice
@@ -33,12 +33,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: 安装编译依赖
+    - name: Install Dependencies
       run: |
         sudo apt update -y
         sudo apt install -y build-essential libncurses-dev gawk git libssl-dev gettext xsltproc zlib1g-dev unzip python3 python3-pip libelf-dev flex bison
 
-    - name: 下载指定分支源码
+    - name: Clone Source Code
       run: |
         if [ "${{ inputs.system }}" = "immortalwrt" ]; then
           git clone --depth=1 -b ${{ inputs.source_branch }} https://github.com/immortalwrt/immortalwrt openwrt
@@ -46,13 +46,11 @@ jobs:
           git clone --depth=1 -b ${{ inputs.source_branch }} https://github.com/openwrt/openwrt openwrt
         fi
 
-    - name: 设置内核版本 + 自动开启Docker内核模块
+    - name: Configure Kernel and Docker Support
       run: |
         cd openwrt
-        # 替换内核版本
         sed -i "s/^KERNEL_PATCHVER.*/KERNEL_PATCHVER=${{ inputs.kernel_ver }}/" target/linux/armvirt/Makefile
         
-        # 给当前内核开启Docker必需模块（关键！所有版本通用）
         cat >> target/linux/armvirt/config-${{ inputs.kernel_ver }} << EOF
 CONFIG_CGROUPS=y
 CONFIG_NAMESPACES=y
@@ -73,25 +71,21 @@ CONFIG_CGROUP_FREEZER=y
 CONFIG_CGROUP_SCHED=y
 EOF
 
-        # 更新软件源
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: 导入S805 32位完整配置（Docker+中文+Argon）
+    - name: Import S805 Config
       run: |
         cd openwrt
-        # 核心编译配置
         cat > .config << EOF
 CONFIG_TARGET_armvirt=y
 CONFIG_TARGET_armvirt_32=y
 CONFIG_TARGET_armvirt_32_Default=y
 CONFIG_ROOTSFS_PARTSIZE=1536
-# Docker 完整支持
 CONFIG_PACKAGE_docker=y
 CONFIG_PACKAGE_luci-app-dockerman=y
 CONFIG_PACKAGE_containerd=y
 CONFIG_PACKAGE_dockerd=y
-# 常用插件
 CONFIG_PACKAGE_luci-app-ttyd=y
 CONFIG_PACKAGE_luci-theme-argon=y
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
@@ -99,7 +93,6 @@ CONFIG_PACKAGE_block-mount=y
 CONFIG_PACKAGE_e2fsprogs=y
 EOF
 
-        # 固定IP配置
         mkdir -p files/etc/config
         cat > files/etc/config/network << EOF
 config interface 'loopback'
@@ -125,7 +118,6 @@ config device
         list ports 'eth0'
 EOF
 
-        # 中文 + 默认Argon主题
         cat > files/etc/config/luci << EOF
 config core 'main'
         option lang 'zh_cn'
@@ -133,18 +125,18 @@ config core 'main'
         option resourcebase '/luci-static/resources'
 EOF
 
-    - name: 生成配置
+    - name: Generate Defconfig
       run: |
         cd openwrt
         make defconfig
 
-    - name: 开始编译（单线程更稳定）
+    - name: Build Firmware
       run: |
         cd openwrt
         make -j1 V=s
 
-    - name: 上传固件
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: openwrt-s805-${{ inputs.source_branch }}-k${{ inputs.kernel_ver }}-docker
+        name: openwrt-s805-${{ inputs.kernel_ver }}
         path: openwrt/bin/targets/armvirt/32/*.img.gz
