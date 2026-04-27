@@ -17,6 +17,7 @@ on:
         type: choice
         options:
           - openwrt-24.10
+          - openwrt-25.10
       kernel:
         description: "选择内核版本（全部支持Docker）"
         required: true
