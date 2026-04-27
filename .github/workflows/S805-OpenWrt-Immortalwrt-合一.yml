@@ -1,54 +1,46 @@
-name: S805-OpenWrt&Immortalwrt-二合一(带Docker+Argon+空间扩容)
+name: S805-OpenWrt&Immortalwrt(带Docker+Argon+空间扩容)
 on:
   workflow_dispatch:
     inputs:
       SOURCE_TYPE:
-        description: 选择系统（OpenWrt纯净 / Immortalwrt天灵）
+        description: '选择系统'
         required: true
-        default: Immortalwrt
+        default: 'Immortalwrt'
         type: choice
         options:
           - OpenWrt
           - Immortalwrt
       REPO_BRANCH:
-        description: 源码分支
+        description: '分支'
         required: true
-        default: openwrt-23.05
+        default: 'openwrt-23.05'
         type: choice
         options:
           - openwrt-23.05
           - openwrt-24.10
       CONFIG_FILE:
-        description: 设备配置
+        description: '配置文件'
         required: true
-        default: s805
+        default: 's805'
 
 env:
   REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
   TZ: Asia/Shanghai
-  # 自动集成：Docker + 主题 + TTYD + 中文 + 空间工具
-  ADD_PACKAGES: luci-app-ttyd luci-theme-argon luci-i18n-base-zh-cn luci-i18n-ttyd-zh-cn luci-app-dockerman luci-lib-docker docker docker-compose block-mount blkid lsblk e2fsprogs gdisk fdisk
-  # 自动分区扩容：系统空间 + Docker空间
-  ROOTFS_PARTSIZE: "1536"
-  # 自动启用外部空间
-  ENABLE_EXTERNAL_STORAGE: "1"
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+    - name:  checkout
+      uses: actions/checkout@v4
 
-      - name: 设置源码地址
-        run: |
-          if [ "${{ inputs.SOURCE_TYPE }}" = "OpenWrt" ]; then
-            echo "REPO_URL=https://github.com/openwrt/openwrt" >> $GITHUB_ENV
-          else
-            echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >> $GITHUB_ENV
-          fi
+    - name: 设置源码
+      run: |
+        if [ "${{ inputs.SOURCE_TYPE }}" = "OpenWrt" ]; then
+          echo "REPO_URL=https://github.com/openwrt/openwrt" >> $GITHUB_ENV
+        else
+          echo "REPO_URL=https://github.com/immortalwrt/immortalwrt" >> $GITHUB_ENV
+        fi
 
-      - name: 检测环境
-        uses: 281677160/common@mishi
-
-      - name: 编译S805固件(带Docker+空间分配+主题+汉化)
-        uses: 281677160/common@armv7
+    - name: 运行编译
+      uses: 281677160/common@main
