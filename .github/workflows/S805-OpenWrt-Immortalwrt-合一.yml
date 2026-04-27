@@ -47,19 +47,18 @@ jobs:
     - name: 导入 S805 配置
       run: |
         cd openwrt
-        cat > .config << EOF
-CONFIG_TARGET_armvirt=y
-CONFIG_TARGET_armvirt_32=y
-CONFIG_TARGET_armvirt_32_Default=y
-CONFIG_ROOTSFS_PARTSIZE=1536
-CONFIG_PACKAGE_luci-app-ttyd=y
-CONFIG_PACKAGE_luci-theme-argon=y
-CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-CONFIG_PACKAGE_docker=y
-CONFIG_PACKAGE_luci-app-dockerman=y
-CONFIG_PACKAGE_block-mount=y
-CONFIG_PACKAGE_e2fsprogs=y
-EOF
+        # 写入 S805 核心配置（含Docker/Argon/空间扩容）
+        echo "CONFIG_TARGET_armvirt=y" >> .config
+        echo "CONFIG_TARGET_armvirt_32=y" >> .config
+        echo "CONFIG_TARGET_armvirt_32_Default=y" >> .config
+        echo "CONFIG_ROOTSFS_PARTSIZE=1536" >> .config
+        echo "CONFIG_PACKAGE_luci-app-ttyd=y" >> .config
+        echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
+        echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+        echo "CONFIG_PACKAGE_docker=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-dockerman=y" >> .config
+        echo "CONFIG_PACKAGE_block-mount=y" >> .config
+        echo "CONFIG_PACKAGE_e2fsprogs=y" >> .config
 
     - name: 下载依赖
       run: |
